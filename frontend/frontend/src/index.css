@@ -1,34 +1,76 @@
-/* Additions for Admin/Support UI */
-.logo-box-lg { width: 60px; height: 60px; background: #6366f1; color: white; border-radius: 16px; display: grid; place-items: center; font-size: 24px; font-weight: 800; margin-bottom: 20px; }
-.scroll-indicator { margin-top: 50px; opacity: 0.5; font-size: 12px; animation: bounce 2s infinite; }
-@keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(10px); } }
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
-.file-label { font-size: 10px; font-weight: 700; margin-top: 8px; color: #333; }
-.file-label-dark { font-size: 10px; font-weight: 700; margin-top: 8px; color: #000; }
+:root {
+  --primary: #4338ca;
+  --primary-light: #6366f1;
+  --accent: #f59e0b;
+  --bg-gradient: linear-gradient(135deg, #e0e7ff 0%, #fae8ff 100%);
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: 1px solid rgba(255, 255, 255, 0.6);
+  --shadow: 0 8px 32px rgba(31, 38, 135, 0.1);
+  --text: #1e293b;
+}
 
-.section-header { display: flex; justify-content: space-between; align-items: center; margin: 20px 10px 10px 10px; }
-.btn-icon { background: rgba(255,255,255,0.6); border: 1px solid white; padding: 8px; border-radius: 12px; cursor: pointer; color: var(--primary); }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
-/* Modal */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 200; backdrop-filter: blur(5px); }
-.modal { background: white; width: 90%; max-width: 320px; padding: 20px; border-radius: 20px; animation: popUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-.modal-header { display: flex; justify-content: space-between; margin-bottom: 15px; font-weight: 700; font-size: 18px; }
-.modal textarea { width: 100%; height: 100px; padding: 10px; border-radius: 12px; border: 1px solid #ddd; font-family: inherit; resize: none; }
-@keyframes popUp { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+body {
+  margin: 0; font-family: 'Plus Jakarta Sans', sans-serif;
+  background: var(--bg-gradient); color: var(--text);
+  min-height: 100vh;
+}
 
-/* Stats */
-.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
-.stat-card { text-align: center; padding: 15px; }
-.stat-card h3 { margin: 0; font-size: 24px; color: var(--primary); }
-.stat-card p { margin: 5px 0 0; font-size: 12px; color: #666; }
+/* Animations */
+@keyframes float { 0% { transform: translateY(0px); } 50% { transform: translateY(-10px); } 100% { transform: translateY(0px); } }
+@keyframes spin { 100% { transform: rotate(360deg); } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
-/* Input Styles */
-.input-row { display: flex; gap: 10px; }
-.input-col { flex: 1; }
-.input-col label { font-size: 11px; font-weight: 700; margin-left: 5px; display: block; margin-bottom: 5px; }
-.input-col input { width: 100%; padding: 10px; border-radius: 12px; border: 1px solid white; background: rgba(255,255,255,0.5); outline: none; }
+.app-container { max-width: 480px; margin: 0 auto; padding: 20px 20px 100px; position: relative; }
 
-.coin-row { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.5); padding: 10px; border-radius: 12px; margin: 10px 0; }
-.coin-label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
-.mt-2 { margin-top: 8px; }
-.mt-3 { margin-top: 15px; }
+/* Landing Page */
+.landing-view { height: 100vh; overflow-y: scroll; scroll-behavior: smooth; }
+.hero { min-height: 80vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.hero h1 { font-size: 48px; font-weight: 800; background: linear-gradient(to right, #4338ca, #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 10px 0; }
+.hero p { color: #64748b; font-size: 18px; margin-bottom: 30px; }
+.btn-google { background: white; border: var(--glass-border); padding: 12px 24px; border-radius: 30px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); transition: 0.2s; }
+.btn-google:active { transform: scale(0.95); }
+
+/* Printer Animation */
+.printer-stage { height: 100vh; display: flex; align-items: center; justify-content: center; position: relative; }
+.printer-box { width: 220px; height: 120px; background: #334155; border-radius: 20px; position: relative; z-index: 10; display: flex; justify-content: center; }
+.printer-slot { width: 180px; height: 8px; background: #0f172a; margin-top: 50px; border-radius: 10px; }
+.paper { width: 140px; height: 180px; background: white; position: absolute; border: 1px solid #cbd5e1; display: flex; align-items: center; justify-content: center; transition: 0.1s linear; }
+.paper.in { top: -140px; z-index: 5; }
+.paper.out { top: 60px; z-index: 1; }
+
+/* App UI */
+.card { background: var(--glass-bg); backdrop-filter: blur(12px); border: var(--glass-border); border-radius: 24px; padding: 20px; margin-bottom: 15px; box-shadow: var(--shadow); animation: slideUp 0.4s ease-out; }
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+.logo { font-weight: 800; font-size: 20px; color: var(--primary); }
+.coin-badge { background: white; padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 700; color: var(--accent); border: 1px solid rgba(0,0,0,0.05); display: flex; align-items: center; gap: 5px; cursor: pointer; }
+
+/* Upload & Form */
+.upload-zone { border: 2px dashed var(--primary-light); background: rgba(99,102,241,0.05); padding: 30px; border-radius: 20px; text-align: center; cursor: pointer; }
+.file-row { display: flex; align-items: center; gap: 10px; background: white; padding: 10px; border-radius: 12px; }
+.toggle-group { display: flex; gap: 5px; background: rgba(0,0,0,0.05); padding: 5px; border-radius: 14px; margin-bottom: 10px; }
+.toggle-btn { flex: 1; border: none; padding: 10px; border-radius: 10px; font-weight: 600; cursor: pointer; background: transparent; color: #64748b; transition: 0.2s; }
+.toggle-btn.active { background: white; color: var(--primary); box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+
+.input-row { display: flex; gap: 10px; margin-top: 10px; }
+.input-wrap { flex: 1; }
+.input-wrap label { font-size: 11px; font-weight: 700; margin-left: 5px; color: #64748b; }
+.glass-input { width: 100%; padding: 10px; border-radius: 12px; border: 1px solid white; background: rgba(255,255,255,0.5); outline: none; font-size: 16px; font-weight: 600; }
+
+.bill-row { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 8px; color: #475569; }
+.bill-total { border-top: 1px dashed #cbd5e1; padding-top: 10px; margin-top: 10px; font-weight: 800; font-size: 18px; display: flex; justify-content: space-between; color: var(--text); }
+.btn-main { width: 100%; background: var(--primary); color: white; border: none; padding: 16px; border-radius: 16px; font-size: 16px; font-weight: 600; margin-top: 15px; cursor: pointer; box-shadow: 0 4px 15px rgba(67, 56, 202, 0.3); }
+
+/* Orders */
+.order-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid rgba(0,0,0,0.05); }
+.status { font-size: 10px; font-weight: 800; padding: 4px 8px; border-radius: 20px; text-transform: uppercase; }
+.status.PAID { background: #dcfce7; color: #166534; }
+.status.PRINTED { background: #dbeafe; color: #1e40af; }
+
+/* Admin & Modal */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+.modal { background: white; width: 90%; max-width: 350px; padding: 25px; border-radius: 24px; animation: slideUp 0.3s; }
+.spinner { width: 30px; height: 30px; border: 3px solid white; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto; }
