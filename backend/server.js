@@ -12,173 +12,244 @@ const PORT = process.env.PORT || 4000;
 app.use(cors());
 app.use(express.json());
 
+// Initialize Supabase
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const upload = multer({ storage: multer.memoryStorage() });
 
-const RATES = { bw_single: 1.5, bw_double: 1.0, col_single: 5.0, col_double: 4.5 };
-const COIN_VAL = 0.1; 
+// Pricing Configuration
+const RATES = { 
+  bw_single: 1.5, bw_double: 1.0, 
+  col_single: 5.0, col_double: 4.5 
+};
+const COIN_VAL = 0.1; // 1 Coin = 0.1 currency unit
+const TAX_RATE = 0.18;
 
-/* --- 1. PROCESS PRINT --- */
+// --- 1. PROCESS PRINT ORDER ---
 app.post("/api/process-print", upload.single("file"), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: "No file" });
+    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
-    const meta = JSON.parse(req.body.meta || "{}");
-    const { userId, couponCode, useCoins, copies = 1 } = meta;
+    // 1. Safe JSON Parse
+    let meta;
+    try {
+      meta = JSON.parse(req.body.meta || "{}");
+    } catch (e) {
+      return res.status(400).json({ error: "Invalid metadata" });
+    }
 
+    const { userId, userEmail, couponCode, useCoins, copies = 1, numPages = 1 } = meta;
+
+    // 2. Check VIP Status
     const { data: profile } = await supabase.from("profiles").select("role").eq("id", userId).single();
     const isVIP = profile?.role === 'VIP';
 
-    const rate = meta.color 
-      ? (meta.doubleSide ? RATES.col_double : RATES.col_single) 
+    // 3. Calculate Rates
+    // Logic: If color=true, use Color rates. If doubleSide=true, use Double rates.
+    const rateType = meta.color 
+      ? (meta.doubleSide ? RATES.col_double : RATES.col_single)
       : (meta.doubleSide ? RATES.bw_double : RATES.bw_single);
     
-    const numPages = parseInt(meta.pages.length || 0);
-    const totalSheets = numPages * parseInt(copies); 
+    // Total Sheets calculation (User input "numPages" is pages in PDF)
+    // If Double Sided: 10 pages = 5 sheets. 11 pages = 6 sheets.
+    const sheetsPerCopy = meta.doubleSide ? Math.ceil(parseInt(numPages) / 2) : parseInt(numPages);
+    const totalSheets = sheetsPerCopy * parseInt(copies);
     
-    let subtotal = totalSheets * rate;
-    let total = subtotal + (subtotal * 0.18); 
+    let subtotal = totalSheets * rateType;
+    
+    // VIP gets base printing free, but let's assume standard logic first
+    if (isVIP) subtotal = 0;
 
-    if (isVIP) { subtotal = 0; total = 0; }
-
-    if (couponCode && !isVIP) {
+    // Tax is added to the subtotal
+    let total = subtotal + (subtotal * TAX_RATE);
+    
+    // 4. Coupons
+    if (couponCode && !isVIP && total > 0) {
       const { data: c } = await supabase.from("coupons").select("*").eq("code", couponCode).single();
       if (c && c.active) {
+        // Check one-time usage
         const { data: used } = await supabase.from("used_coupons").select("*").eq("user_id", userId).eq("coupon_code", couponCode).maybeSingle();
+        
         if (!c.is_one_time || !used) {
-           total -= (total * c.discount_percent) / 100;
-           if(c.is_one_time) await supabase.from("used_coupons").insert([{ user_id: userId, coupon_code: couponCode }]);
+           // Calculate discount
+           const discountAmount = (total * c.discount_percent) / 100;
+           total -= discountAmount;
+
+           // If one-time, mark it used NOW (or after payment success, but here is safer for locking)
+           if(c.is_one_time) {
+             await supabase.from("used_coupons").insert([{ user_id: userId, coupon_code: couponCode }]);
+           }
         }
       }
     }
 
+    // 5. Wallet Coins
     let coinsRedeemed = 0;
     if (useCoins && total > 0 && !isVIP) {
       const { data: w } = await supabase.from("wallets").select("balance").eq("user_id", userId).single();
-      coinsRedeemed = Math.min(w?.balance || 0, total / COIN_VAL);
-      total -= coinsRedeemed * COIN_VAL;
+      if (w && w.balance > 0) {
+        // Max value we can cover with coins
+        const coinValueAvailable = w.balance * COIN_VAL;
+        const valueToCover = Math.min(total, coinValueAvailable);
+        
+        coinsRedeemed = valueToCover / COIN_VAL; // Convert back to coins
+        total -= valueToCover;
+      }
     }
 
+    // 6. Generate QR & Filename
     const random6 = crypto.randomBytes(3).toString("hex").toUpperCase(); 
     const char7 = meta.color ? '1' : '0';
     const char8 = meta.doubleSide ? '1' : '0';
     const qrCode = `${random6}${char7}${char8}`; 
+    const fileName = `${qrCode}_${Date.now()}.pdf`; 
 
-    const fileName = `${qrCode}.pdf`; 
-    await supabase.storage.from("prints").upload(fileName, req.file.buffer, { contentType: "application/pdf" });
+    // 7. Upload to Supabase Storage
+    const { error: uploadError } = await supabase.storage
+      .from("prints")
+      .upload(fileName, req.file.buffer, { contentType: "application/pdf" });
 
+    if (uploadError) throw new Error("Storage Upload Failed");
+
+    // 8. Insert Order Record
+    // "expires_at" is 1 hour from now
+    const expiresAt = new Date(Date.now() + 3600 * 1000).toISOString();
+    
     await supabase.from("orders").insert([{
-      order_id: meta.order_id, 
       user_id: userId,
-      user_email: meta.email,
+      user_email: userEmail,
       qr_code: qrCode,
       file_path: fileName,
       pages_selected: totalSheets, 
       color: meta.color,
       double_sided: meta.doubleSide,
-      total_amount: total.toFixed(2),
+      total_amount: Math.max(0, total).toFixed(2), // Ensure no negative
       status: "PAID",
-      expires_at: new Date(Date.now() + 3600 * 1000).toISOString()
+      created_at: new Date(),
+      expires_at: expiresAt,
+      printed: false,
+      expired: false
     }]);
 
+    // 9. Wallet Transactions (Debit & Credit)
     if (coinsRedeemed > 0) {
-      await supabase.from("wallet_transactions").insert([{ user_id: userId, amount: -coinsRedeemed, type: "DEBIT", note: `Paid for ${qrCode}` }]);
+      await supabase.from("wallet_transactions").insert([{ 
+        user_id: userId, 
+        amount: -coinsRedeemed, 
+        type: "DEBIT", 
+        note: `Paid for order ${qrCode}` 
+      }]);
     }
     
+    // Earn Cashback (1 coin per 10 currency units spent on subtotal)
     const earned = !isVIP ? Math.floor(subtotal / 10) : 0;
     if (earned > 0) {
-      await supabase.from("wallet_transactions").insert([{ user_id: userId, amount: earned, type: "EARN", note: `Cashback for ${qrCode}` }]);
+      await supabase.from("wallet_transactions").insert([{ 
+        user_id: userId, 
+        amount: earned, 
+        type: "EARN", 
+        note: `Cashback for ${qrCode}` 
+      }]);
     }
     
-    const { data: w } = await supabase.from("wallets").select("balance").eq("user_id", userId).single();
-    await supabase.from("wallets").update({ balance: (w?.balance || 0) - coinsRedeemed + earned }).eq("user_id", userId);
+    // Update Wallet Balance
+    if (coinsRedeemed > 0 || earned > 0) {
+        // Fetch fresh balance first to be safe
+        const { data: currentWallet } = await supabase.from("wallets").select("balance").eq("user_id", userId).single();
+        const newBalance = (currentWallet?.balance || 0) - coinsRedeemed + earned;
+        
+        // Upsert ensures wallet exists if it didn't
+        await supabase.from("wallets").upsert({ user_id: userId, balance: newBalance });
+    }
 
     res.json({ success: true, qr: qrCode });
 
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error(e);
+    res.status(500).json({ error: e.message }); 
+  }
 });
 
-/* --- 2. ADMIN STATS (With Graph Data) --- */
-app.get("/api/admin/stats", async (req, res) => {
-  try {
-    const { date } = req.query; // Optional date filter
-    const targetDate = date ? new Date(date) : new Date();
-    
-    const startOfDay = new Date(targetDate.setHours(0,0,0,0)).toISOString();
-    const endOfDay = new Date(targetDate.setHours(23,59,59,999)).toISOString();
+// --- 2. GET USER DATA (Wallet & Orders) ---
+app.get("/api/user-data/:uid", async (req, res) => {
+    try {
+        const { uid } = req.params;
+        
+        // Parallel fetch for speed
+        const [walletRes, ordersRes] = await Promise.all([
+            supabase.from("wallets").select("balance").eq("user_id", uid).single(),
+            supabase.from("orders").select("*").eq("user_id", uid).order("created_at", { ascending: false }).limit(10)
+        ]);
 
-    // 1. Daily Stats
-    const { data: dayOrders } = await supabase.from("orders")
-      .select("total_amount, created_at")
-      .gte("created_at", startOfDay)
-      .lte("created_at", endOfDay);
-
-    const dayRevenue = dayOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
-    
-    // 2. Weekly Graph Data (Last 7 Days)
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
-    const { data: weekData } = await supabase.from("orders")
-      .select("total_amount, created_at")
-      .gte("created_at", sevenDaysAgo.toISOString());
-
-    // Group by Day
-    const graphData = {};
-    weekData.forEach(o => {
-      const day = new Date(o.created_at).toLocaleDateString('en-US', { weekday: 'short' });
-      graphData[day] = (graphData[day] || 0) + o.total_amount;
-    });
-
-    const chart = Object.keys(graphData).map(key => ({ name: key, value: graphData[key] }));
-
-    res.json({ 
-      dayRevenue: dayRevenue.toFixed(2),
-      dayCount: dayOrders.length,
-      chartData: chart
-    });
-
-  } catch (e) { res.status(500).json({ error: e.message }); }
+        res.json({
+            wallet: walletRes.data?.balance || 0,
+            orders: ordersRes.data || []
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
+// --- 3. KIOSK CONSUME (The "Print" Action) ---
 app.post("/api/print/consume", async (req, res) => {
   try {
     const { qr } = req.body;
+    
     const { data: order } = await supabase.from("orders").select("*").eq("qr_code", qr).single();
-    if (!order) return res.status(404).json({ error: "Not found" });
-    if (order.status === "PRINTED") return res.status(400).json({ error: "Used" });
-    if (new Date(order.expires_at) < new Date()) return res.status(400).json({ error: "Expired" });
+    
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    if (order.printed) return res.status(400).json({ error: "Already used" });
+    if (order.expired || new Date(order.expires_at) < new Date()) {
+        // Mark as expired if not already
+        await supabase.from("orders").update({ expired: true, status: "EXPIRED" }).eq("qr_code", qr);
+        return res.status(400).json({ error: "Code expired" });
+    }
 
-    await supabase.from("orders").update({ status: "PRINTED", printed_at: new Date() }).eq("qr_code", qr);
-    if(order.file_path) await supabase.storage.from("prints").remove([order.file_path]);
+    // Valid Print:
+    // 1. Mark status
+    await supabase.from("orders").update({ 
+        status: "PRINTED", 
+        printed: true, 
+        printed_at: new Date() 
+    }).eq("qr_code", qr);
+
+    // 2. DELETE FILE (Privacy Feature)
+    if (order.file_path) {
+        await supabase.storage.from("prints").remove([order.file_path]);
+    }
     
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post("/api/check-coupon", async (req, res) => {
-    try {
-        const { code, userId } = req.body;
-        const { data: c } = await supabase.from("coupons").select("*").eq("code", code).maybeSingle();
-        if (!c || !c.active) return res.status(400).json({ error: "Invalid" });
-        if (c.is_one_time) {
-          const { data: u } = await supabase.from("used_coupons").select("*").eq("user_id", userId).eq("coupon_code", code).maybeSingle();
-          if (u) return res.status(400).json({ error: "Used" });
+// --- 4. CRON / CLEANUP (Manual trigger or scheduled) ---
+// In a real app, use Supabase Edge Functions. Here, we expose an endpoint 
+// that the frontend or a cron service can hit to clean old files.
+app.get("/api/cleanup", async (req, res) => {
+    const now = new Date().toISOString();
+    
+    // Find expired orders that aren't marked expired yet
+    const { data: expiredOrders } = await supabase.from("orders")
+        .select("file_path, order_id")
+        .lt("expires_at", now)
+        .eq("expired", false)
+        .eq("printed", false); // Only unprinted ones need cleanup
+
+    if (expiredOrders && expiredOrders.length > 0) {
+        const files = expiredOrders.map(o => o.file_path).filter(Boolean);
+        const ids = expiredOrders.map(o => o.order_id);
+
+        // Delete files
+        if (files.length > 0) await supabase.storage.from("prints").remove(files);
+        
+        // Update DB
+        /* Note: Supabase doesn't support bulk update with 'in' easily in JS client for updates 
+           without iterating, but 'update' with a filter works */
+        // We will just do a loop or simple query for now
+        for (const id of ids) {
+             await supabase.from("orders").update({ expired: true, status: 'EXPIRED' }).eq("order_id", id);
         }
-        res.json({ success: true, percent: c.discount_percent });
-      } catch (e) { res.status(500).json({ error: e.message }); }
+    }
+    res.json({ cleaned: expiredOrders?.length || 0 });
 });
 
-app.post("/api/support", async (req, res) => {
-    try {
-        const { userId, orderId, message } = req.body;
-        await supabase.from("support_tickets").insert([{ user_id: userId, order_id: orderId, message }]);
-        res.json({ success: true });
-      } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.get("/api/wallet/history/:uid", async (req, res) => {
-    const { data } = await supabase.from("wallet_transactions").select("*").eq("user_id", req.params.uid).order("created_at", { ascending: false });
-    res.json(data || []);
-});
-
-app.listen(PORT, () => console.log(`🚀 Server on ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server running on ${PORT}`));
