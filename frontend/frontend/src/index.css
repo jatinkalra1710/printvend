@@ -88,6 +88,28 @@ body::after {
   -webkit-text-fill-color: transparent; 
   letter-spacing: -0.02em; 
 }
+/* .hero-title {
+  font-size: 28px;
+  font-weight: 800;
+  margin-bottom: 8px;
+  letter-spacing: -0.02em;
+  color: var(--text);
+} */
+
+/* gradient ONLY for name */
+.hero-name {
+  background: var(--primary-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* keep emoji normal */
+.wave {
+  -webkit-text-fill-color: initial;
+  background: none;
+}
+
 .hero-subtitle { font-size: 15px; opacity: 0.7; margin-bottom: 30px; font-weight: 500; }
 
 /* --- PROCESS GRID --- */
