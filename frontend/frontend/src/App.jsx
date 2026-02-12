@@ -428,7 +428,14 @@ export default function App() {
           {step === 0 && (
             <>
               <div className="hero-section">
-                <div className="hero-title">Hello, {profile.full_name?.split(" ")[0]} 👋</div>
+                <div className="hero-title">
+  Hello,{" "}
+  <span className="hero-name">
+    {profile.full_name?.split(" ")[0]}
+  </span>{" "}
+  <span className="wave">👋</span>
+</div>
+
                 <div className="hero-subtitle">Ready to print your next document?</div>
                 <button
                   className="btn"
