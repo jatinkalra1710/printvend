@@ -474,7 +474,7 @@ export default function App() {
               <h3>Upload Document</h3>
               <div className="upload-box" onClick={() => document.getElementById("f")?.click()}>
                 <input type="file" id="f" hidden accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" onChange={onFileChange} />
-                <div style={{ fontWeight: 800 }}>{file ? `📄 ${file.name}` : "Click to select file (PDF / DOC / DOCX / PNG / JPG)"}</div>
+                <div style={{ fontWeight: 800 }}>{file ? `📄 ${file.name}` : "Click to select PDF"}</div>
                 <div style={{ marginTop: 8, opacity: 0.75 }}>Files are encrypted and will be auto-deleted after printing.</div>
               </div>
               <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
