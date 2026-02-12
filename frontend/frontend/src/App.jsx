@@ -13,16 +13,10 @@ const RATES = { bw_single: 1.5, bw_double: 1.1, col_single: 5.0, col_double: 4.5
 const GST = 0.18;
 const COIN_VAL = 0.1;
 
+// CHANGED: Restricted to PDF only
 const SUPPORTED_TYPES = [
   "application/pdf",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "image/png",
-  "image/jpeg",
-  "image/jpg",
 ];
-
-const isPDF = (file) => file?.type === "application/pdf";
 
 function makeOrderId() {
   const now = new Date();
@@ -79,19 +73,19 @@ function Countdown({ expiresAt, onExpire }) {
     return () => clearInterval(ref.current);
   }, [expiresAt, onExpire]);
 
-let cls = "timer-normal";
-if (secs <= 60) cls = "timer-danger";
-else if (secs <= 300) cls = "timer-warning";
+  let cls = "timer-normal";
+  if (secs <= 60) cls = "timer-danger";
+  else if (secs <= 300) cls = "timer-warning";
 
-if (secs <= 0) {
-  return <span className="timer-danger">Expired</span>;
-}
+  if (secs <= 0) {
+    return <span className="timer-danger">Expired</span>;
+  }
 
-return (
-  <span className={cls}>
-    {formatSeconds(secs)}
-  </span>
-);
+  return (
+    <span className={cls}>
+      {formatSeconds(secs)}
+    </span>
+  );
 
 
 }
@@ -345,13 +339,13 @@ export default function App() {
     setSupportOrder(null);
   };
 
-  // UI: when user clicks continue for non-PDF files, server will recalc pages
   // file selection
   const onFileChange = (e) => {
     const f = e.target.files[0];
     if (!f) return;
+    // CHANGED: Update validation message
     if (!SUPPORTED_TYPES.includes(f.type)) {
-      alert("Unsupported file type. Use PDF, DOC/DOCX, PNG or JPEG.");
+      alert("Unsupported file type. Please upload a PDF.");
       return;
     }
     setFile(f);
@@ -429,12 +423,12 @@ export default function App() {
             <>
               <div className="hero-section">
                 <div className="hero-title">
-  Hello,{" "}
-  <span className="hero-name">
-    {profile.full_name?.split(" ")[0]}
-  </span>{" "}
-  <span className="wave">👋</span>
-</div>
+      Hello,{" "}
+      <span className="hero-name">
+        {profile.full_name?.split(" ")[0]}
+      </span>{" "}
+      <span className="wave">👋</span>
+    </div>
 
                 <div className="hero-subtitle">Ready to print your next document?</div>
                 <button
@@ -454,7 +448,8 @@ export default function App() {
                 <div className="process-step">
                   <span className="p-icon">📂</span>
                   <div className="p-title">1. Upload</div>
-                  <div className="p-desc">PDF, DOCX, Image</div>
+                  {/* CHANGED: Text update */}
+                  <div className="p-desc">PDF Only</div>
                 </div>
                 <div className="process-step">
                   <span className="p-icon">⚙️</span>
@@ -479,8 +474,9 @@ export default function App() {
           {step === 1 && (
             <div className="card">
               <h3>Upload Document</h3>
+              {/* CHANGED: Input accept attribute and text */}
               <div className="upload-box" onClick={() => document.getElementById("f")?.click()}>
-                <input type="file" id="f" hidden accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" onChange={onFileChange} />
+                <input type="file" id="f" hidden accept=".pdf" onChange={onFileChange} />
                 <div style={{ fontWeight: 800 }}>{file ? `📄 ${file.name}` : "Click to select PDF"}</div>
                 <div style={{ marginTop: 8, opacity: 0.75 }}>Files are encrypted and will be auto-deleted after printing.</div>
               </div>
@@ -502,32 +498,21 @@ export default function App() {
                 </div>
               </div>
 
-              {isPDF(file) ? (
-                <Document file={file} onLoadSuccess={({ numPages }) => { setNumPages(numPages); setSelectedPages([...Array(numPages)].map((_, i) => i + 1)); }}>
-                  <div className="page-grid">
-                    {[...Array(numPages)].map((_, i) => (
-                      <div
-                        key={i}
-                        className={`page-thumb ${selectedPages.includes(i + 1) ? "selected" : ""}`}
-                        onClick={() => setSelectedPages((p) => (p.includes(i + 1) ? p.filter((x) => x !== i + 1) : [...p, i + 1]))}
-                      >
-                        <Page pageNumber={i + 1} width={80} renderTextLayer={false} renderAnnotationLayer={false} />
-                        <div className="page-num">{i + 1}</div>
-                      </div>
-                    ))}
-                  </div>
-                </Document>
-              ) : (
-                <div className="card" style={{ textAlign: "center", padding: 20 }}>
-                  <div style={{ fontSize: 28 }}>📄</div>
-                  <p style={{ fontWeight: 700, marginTop: 10 }}>This file will be converted to PDF on the server</p>
-                  <p style={{ fontSize: 13, opacity: 0.7 }}>Page preview is not available for this file type. After conversion the server will compute actual page count and proceed with printing.</p>
-                  <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 12 }}>
-                    <button className="btn" onClick={() => { setSelectedPages([1]); setStep(3); }}>Continue</button>
-                    <button className="btn secondary" onClick={() => { setFile(null); setSelectedPages([]); setStep(1); }}>Choose different file</button>
-                  </div>
+              {/* CHANGED: Removed the isPDF() check and else block entirely */}
+              <Document file={file} onLoadSuccess={({ numPages }) => { setNumPages(numPages); setSelectedPages([...Array(numPages)].map((_, i) => i + 1)); }}>
+                <div className="page-grid">
+                  {[...Array(numPages)].map((_, i) => (
+                    <div
+                      key={i}
+                      className={`page-thumb ${selectedPages.includes(i + 1) ? "selected" : ""}`}
+                      onClick={() => setSelectedPages((p) => (p.includes(i + 1) ? p.filter((x) => x !== i + 1) : [...p, i + 1]))}
+                    >
+                      <Page pageNumber={i + 1} width={80} renderTextLayer={false} renderAnnotationLayer={false} />
+                      <div className="page-num">{i + 1}</div>
+                    </div>
+                  ))}
                 </div>
-              )}
+              </Document>
 
               <div style={{ display: "grid", gap: 15, margin: "20px 0" }}>
                 <div className="toggle-group">
