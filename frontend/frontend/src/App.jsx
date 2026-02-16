@@ -372,6 +372,7 @@ export default function App() {
 
   <p className="landing-desc">
 <div className="landing-glass-features">
+  <div>💵 Low Cost</div>
   <div>⚡ Instant Prints</div>
   <div>🔒 Secure Files</div>
   <div>🕒 24/7 Access</div>
